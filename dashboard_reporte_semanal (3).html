@@ -111,6 +111,7 @@
         <span id="uploadLabel">Subir Excel</span>
         <input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls" />
       </label>
+      <button class="btn-ghost hidden" id="exportBtn" title="Descargar data.json para compartir">⬇</button>
       <button class="btn-ghost hidden" id="resetBtn" title="Borrar datos">⟲</button>
     </div>
   </div>
@@ -403,6 +404,38 @@ function loadState(){
   }catch(e){}
 }
 
+function exportDataJson(){
+  const payload = {
+    products: state.products, diasInfo: state.diasInfo, weekLabel: state.weekLabel,
+    fileName: state.fileName, updatedAt: Date.now(),
+  };
+  const blob = new Blob([JSON.stringify(payload)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'data.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function tryLoadPublishedData(){
+  try{
+    const res = await fetch('./data.json', {cache:'no-store'});
+    if(!res.ok) return false;
+    const parsed = await res.json();
+    if(!parsed || !Array.isArray(parsed.products) || parsed.products.length === 0) return false;
+    state.products = parsed.products;
+    state.diasInfo = parsed.diasInfo || [];
+    state.weekLabel = parsed.weekLabel || '';
+    state.fileName = parsed.fileName || '';
+    return true;
+  }catch(e){
+    return false;
+  }
+}
+
 function bulletBarHtml(cumplimiento, status){
   if(cumplimiento===null){
     return `<div class="bar-track" style="border-style:dashed;"></div>`;
@@ -514,6 +547,7 @@ function render(){
   document.getElementById('emptyState').classList.toggle('hidden', hasData);
   document.getElementById('uploadLabel').textContent = hasData ? 'Cambiar archivo' : 'Subir Excel';
   document.getElementById('resetBtn').classList.toggle('hidden', !hasData);
+  document.getElementById('exportBtn').classList.toggle('hidden', !hasData);
   document.getElementById('weekLabelInput').classList.toggle('hidden', !hasData);
   document.getElementById('weekLabelInput').value = state.weekLabel;
   document.getElementById('tabs').classList.toggle('hidden', !hasData);
@@ -913,11 +947,13 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
 });
 
 document.getElementById('resetBtn').addEventListener('click', () => {
-  state = {products:[], diasInfo:[], weekLabel:'', fileName:'', page:'resumen', search:'', statusFilter:'todos', familyFilter:'todas', sortKey:'desvioAbs', sortDir:'desc', searchDevol:'', familyFilterDevol:'todas', sortKeyDevol:'devolRatio', sortDirDevol:'desc', productSearch:'', familyFilterDetalle:'todas', selectedProductKey:null};
+  state = {products:[], diasInfo:[], weekLabel:'', fileName:'', page:'resumen', search:'', statusFilter:'todos', familyFilter:'todas', sortKey:'desvioAbs', sortDir:'desc', searchDevol:'', familyFilterDevol:'todas', sortKeyDevol:'devolRatio', sortDirDevol:'desc', productSearch:'', familyFilterDetalle:'todas', selectedProductKey:null, selectedFamily:null};
   localStorage.removeItem(STORAGE_KEY);
   document.getElementById('errorBox').classList.add('hidden');
   render();
 });
+
+document.getElementById('exportBtn').addEventListener('click', exportDataJson);
 
 document.getElementById('weekLabelInput').addEventListener('input', (e) => {
   state.weekLabel = e.target.value;
@@ -998,8 +1034,11 @@ document.addEventListener('click', (e) => {
   }
 });
 
-loadState();
-render();
+(async function init(){
+  const loadedFromPublished = await tryLoadPublishedData();
+  if(!loadedFromPublished) loadState();
+  render();
+})();
 </script>
 </body>
 </html>
